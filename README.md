@@ -4,6 +4,7 @@
 Welcome to MultiMeter, an advanced AU/VST plugin for real-time audio analysis.
 
 ## User Interface
+<img width="698" alt="Screenshot 2024-01-06 at 23 05 19" src="https://github.com/RealAlexZ/MultiMeter/assets/97690118/a4a53936-1607-4e35-ac21-4bb23ee1d69e">
 
 ## Features
 
