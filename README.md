@@ -7,7 +7,7 @@ Welcome to MultiMeter, an advanced AU/VST plugin for real-time audio analysis.
 
 ## Features
 
-### Comprehensive Metering
+### Metering
 - **Stereo Metering Capability**: Monitoring of both left and right channel levels with peak and RMS readings.
 - **Peak and RMS Histogram Display**: Visual representation of dynamic range and level distribution over time.
 - **Customizable Decay Rate Options**: Selection from multiple decay rates (-3dB/s to -36dB/s) for the metering, allowing precise control over the response to signal changes.
@@ -15,7 +15,7 @@ Welcome to MultiMeter, an advanced AU/VST plugin for real-time audio analysis.
 - **Dynamic Meter View Selection**: Choice between different meter views (Both, Peak, Average) for customized visual feedback.
 - **Tick Visibility Toggle**: Option to toggle the visibility of ticks on meters for a cleaner or more detailed view.
 
-### Advanced Visualization Tools
+### Visualization
 - **Goniometer Tool**: Analysis of stereo image with adjustable scale, providing insights into stereo spread and phase issues.
 - **Correlation Meter Feature**: Assessment of phase relationships between channels with a correlation coefficient display.
 - **Response Curve Analyzer Tool**: Real-time FFT spectrum analyzer with adjustable timer for update frequency.
