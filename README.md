@@ -1,7 +1,7 @@
 # MultiMeter
 
 ## Overview
-Welcome to MultiMeter, an advanced AU/VST plugin with comprehensive features designed for real-time audio analysis.
+Welcome to MultiMeter, an advanced AU/VST plugin for real-time audio analysis.
 
 ## User Interface
 
