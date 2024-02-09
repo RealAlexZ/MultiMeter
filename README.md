@@ -1,7 +1,7 @@
 # MultiMeter
 
 ## Overview
-Update: Major code refactoring is current in progress.
+Update: Major code refactoring is currently in progress.
 
 MultiMeter, a cutting-edge AU/VST audio analyzer, caters to audio engineers, producers, and musicians who seek precision and versatility. Leveraging the JUCE framework, MultiMeter delivers a robust array of features for pristine real-time audio analysis, enhancing mixing, mastering, and sound design processes.
 
