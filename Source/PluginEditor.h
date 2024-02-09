@@ -11,22 +11,132 @@
 
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
+#include "CustomComponents.h"
 
-#define NEGATIVE_INFINITY -66.f
+
+// Two macros to set bounds for Dbs.
+#define NEGATIVE_INFINITY -120.f
 #define MAX_DECIBELS 12.f
 
-#define BACKGROUND_COLOR juce::Colour{0xff323232}
+#define BACKGROUND_COLOR juce::Colour{ 0xffd2d2d2 }
+#define HIGHLIGHT_COLOR  juce::Colour{ 0xff48bde8 }
+#define BASE_COLOR  juce::Colour{ 0xff323232  }
 
 //==============================================================================
-//
 struct Tick
 {
-    float db {0.f};
-    int y {0};
+    float db { 0.f };
+    int y { 0 };
+};
+
+// ****************************************************************************
+// LOGARITHMIC SCALE CLASS
+// ****************************************************************************
+class LogarithmicScale : public juce::Component
+{
+public:
+    LogarithmicScale();
+    ~LogarithmicScale() override;
+
+
+    // ========================================================================
+    void paint(juce::Graphics&) override;
+    void resized() override;
+
+
+    // ========================================================================
+    void setGridColour(juce::Colour);
+    void setTextColour(juce::Colour);
+
+
+private:
+    // ========================================================================
+    void calculateBaseTenLogarithm();
+    void calculateFrequencyGrid();
+    void addLabels();
+
+
+    // ========================================================================
+    int getOffsetInHertz(const int);
+    int getCurrentFrequencyInHertz(const int, const int);
+
+
+    // ========================================================================
+    juce::Colour m_gridColour { 0xff464646 };
+    juce::Colour m_textColour { 0xff848484 };
+
+    int m_coefficient{ 10 };
+    int m_maximumFrequencyInHertz{ 20000 };
+    int m_minimumFrequencyInHertz{ 20 };
+
+    std::map<int, float> m_baseTenLogarithm;
+    std::map<int, float> m_frequencyGridPoints;
+    std::map<int, std::unique_ptr<juce::Label>> m_labels;
+
+
+    // ========================================================================
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(LogarithmicScale)
+};
+
+
+// ****************************************************************************
+// GRID CLASS
+// ****************************************************************************
+class xGrid :
+    public juce::Component,
+    public juce::AudioProcessorValueTreeState::Listener
+{
+public:
+
+    // =======================================================================
+    xGrid(juce::AudioProcessorValueTreeState&);
+    ~xGrid() override;
+
+
+    // ========================================================================
+    void paint(juce::Graphics&) override;
+    void resized() override;
+
+
+    // ========================================================================
+    void setGridColour(juce::Colour);
+    void setTextColour(juce::Colour);
+
+private:
+    // ========================================================================
+    void parameterChanged(const juce::String&, float) override;
+
+
+    // ========================================================================
+    void setVolumeRangeInDecibels(const int, int);
+    void calculateAmplitudeGrid();
+    void addLabels();
+
+
+    // ========================================================================
+    juce::AudioProcessorValueTreeState& mr_audioProcessorValueTreeState;
+
+    LogarithmicScale m_logarithmicScale;
+
+    juce::Colour m_gridColour { 0xff464646 };
+    juce::Colour m_textColour { 0xff848484 };
+
+    std::atomic<bool> m_gridStyleIsLogarithmic { true };
+
+    std::atomic<int> m_maximumVolumeInDecibels { 12 };
+    std::atomic<int> m_minimumVolumeInDecibels { -120 };
+    std::atomic<int> m_firstOffsetInDecibels;
+    std::atomic<int> m_offsetInDecibels;
+
+    std::vector<float> m_volumeGridPoints;
+    std::map<int, std::unique_ptr<juce::Label>> m_labels;
+
+
+    // ========================================================================
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(xGrid)
 };
 
 //==============================================================================
-//
 struct DbScale : juce::Component
 {
     ~DbScale() override = default;
@@ -39,11 +149,10 @@ struct DbScale : juce::Component
     
 private:
     juce::Image bkgd;
-    bool showTick = true;
+    bool show_tick = true;
 };
 
 //==============================================================================
-//
 struct ValueHolder : juce::Timer
 {
     ValueHolder();
@@ -69,11 +178,10 @@ private:
     float heldValue = NEGATIVE_INFINITY;
     juce::int64 timeOfPeak;
     int durationToHoldForMs {500};
-    bool isOverThreshold {false};
+    bool isOverThreshold { false };
 };
 
 //==============================================================================
-//
 struct TextMeter : juce::Component
 {
     TextMeter();
@@ -85,23 +193,24 @@ struct TextMeter : juce::Component
 private:
     float cachedValueDb;
     ValueHolder valueHolder;
+    juce::Colour meterBgColour { 0xff323232 };
+    juce::Colour meterLevelColour { 0xff48bde8 };
 };
 
 //==============================================================================
-//
 struct DecayingValueHolder : juce::Timer
 {
     DecayingValueHolder();
     
     void updateHeldValue(float input);
     
-    float getCurrentValue() const;
+    float getCurrentValue() const { return currentValue; };
     
-    bool isOverThreshold() const;
+    bool isOverThreshold() const { return currentValue > threshold; };
     
-    void setHoldTime(int ms);
+    void setHoldTime(int ms) { holdTime = ms; };
     
-    void setDecayRate(float dbPerSec);
+    void setLevelMeterDecay(float dbPerSec) { decayRatePerFrame = dbPerSec / 60.f; };
 
     void setCurrentValue(float val);
     
@@ -110,41 +219,42 @@ struct DecayingValueHolder : juce::Timer
     juce::int64 getHoldTime();
     
 private:
-    static juce::int64 getNow() {return juce::Time::currentTimeMillis();};
+    static juce::int64 getNow() { return juce::Time::currentTimeMillis(); };
     
-    void resetDecayRateMultiplier();
+    void resetLevelMeterDecayMultiplier() { decayRateMultiplier = 1; };
     
-    float currentValue {NEGATIVE_INFINITY};
+    float currentValue { NEGATIVE_INFINITY };
     juce::int64 peakTime = getNow();
     float threshold = 0.f;
-    juce::int64 holdTime = 2000;
-    float decayRatePerFrame {0};
-    float decayRateMultiplier {1};
+    juce::int64 holdTime = 2000; // 2 seconds.
+    float decayRatePerFrame { 0 };
+    float decayRateMultiplier { 1 };
 };
 
 //==============================================================================
-//
 struct Meter : juce::Component
 {
     void paint(juce::Graphics&) override;
     
-    void update(float dbLevel, float decayRate, float holdTime, bool resetHold, bool showTick_);
+    void update(float dbLevel, float decay_rate, float hold_time_, bool reset_hold, bool show_tick_);
     
 private:
-    float peakDb {NEGATIVE_INFINITY};
-    bool showTick = false;
+    float peakDb { NEGATIVE_INFINITY };
+    bool show_tick = false;
     DecayingValueHolder decayingValueHolder;
+
+    juce::Colour meterLevelColour { 0xff48bde8 };
+    juce::Colour meterBgColour { 0xff323232 };
 };
 
 //==============================================================================
-//
 template<typename T>
 struct Averager
 {
     Averager(size_t numElements, T initialValue)
     {
         resize(numElements, initialValue);
-        initSize = numElements;
+        init_size = numElements;
     }
     
     void resize(size_t numElements, T initialValue)
@@ -190,23 +300,22 @@ struct Averager
         return avg.load();
     }
 
-    void setAverageDuration(juce::int64 duration)
+    void setAveragerDuration(juce::int64 duration)
     {
-        size_t newSize = static_cast<size_t>(initSize* duration / DEFAULT_SAMPLE_INTERVAL_MS);
-        resize(newSize, static_cast<T>(getAvg()));
+        size_t new_size = static_cast<size_t>(init_size* duration / DEFAULT_SAMPLE_INTERVAL_MS);
+        resize(new_size, static_cast<T>(getAvg()));
     }
 
 private:
     std::vector<T> elements;
-    std::atomic<float> avg {static_cast<float>(T())};
-    std::atomic<size_t> writeIndex = {0};
-    std::atomic<T> sum {0};
-    size_t initSize = 0;
+    std::atomic<float> avg { static_cast<float>(T()) };
+    std::atomic<size_t> writeIndex = { 0 }; // Added {} wrapping around 0.
+    std::atomic<T> sum { 0 };
+    size_t init_size = 0;
     static constexpr int DEFAULT_SAMPLE_INTERVAL_MS = 100;
 };
 
 //==============================================================================
-//
 class MacroMeter : public juce::Component
 {
 public:
@@ -214,18 +323,16 @@ public:
     
     void resized() override;
     
-    void update(float level, float decayRate, bool showPeak_, bool showAvg_, float holdTime, bool resetHold, bool showTick);
-
+    void update(float level, float decay_rate, bool show_peak, bool shwo_avg, float hold_time_, bool reset_hold, bool show_tick_);
+    
 private:
     TextMeter textMeter;
     Meter instantMeter, averageMeter;
     Averager<float> averager;
-    bool showPeak = true;
-    bool showAvg = true;
+    bool show_peak_ = true; bool show_avg_ = true;
 };
 
 //==============================================================================
-//
 class StereoMeter : public juce::Component
 {
 public:
@@ -235,7 +342,7 @@ public:
     
     void resized() override;
     
-    void update(float leftChanDb, float rightChanDb, float decayRate, int meterViewID, bool showTick, float holdTime, bool resetHold);
+    void update(float leftChanDb, float rightChanDb, float decay_rate, int meterViewID, bool show_tick, float hold_time_, bool reset_hold);
     
     void setText(juce::String labelName);
     
@@ -248,7 +355,6 @@ private:
 };
 
 //==============================================================================
-//
 template<typename T>
 struct ReadAllAfterWriteCircularBuffer
 {
@@ -290,6 +396,14 @@ struct ReadAllAfterWriteCircularBuffer
     
     size_t getReadIndex() const
     {
+        /*
+        size_t nextIndex = writeIndex.load() + 1;
+        if(nextIndex >= getSize())
+        {
+            nextIndex = 0;
+        }
+        return nextIndex;
+         */
         return writeIndex.load();
     }
     
@@ -310,7 +424,6 @@ private:
 
 
 //==============================================================================
-//
 struct Histogram : juce::Component
 {
     Histogram(const juce::String& titleInput);
@@ -322,8 +435,6 @@ struct Histogram : juce::Component
     void mouseDown(const juce::MouseEvent& e) override;
     
     void update(float value);
-    
-    void drawTextLabels(juce::Graphics& g);
     
 private:
     void displayPath(juce::Graphics& g, juce::Rectangle<float> bounds);
@@ -338,8 +449,8 @@ private:
         auto& bufferDataCopy = buffer.getData();
         int readIndexCopy = static_cast<int>(buffer.getReadIndex());
         
-        auto map = [bottomOfBoundsCopy](float db) {return juce::jmap(db, NEGATIVE_INFINITY, MAX_DECIBELS, bottomOfBoundsCopy, 0.f);};
-        auto increment = [bufferSizeCopy](int& index) mutable {index = (index + 1) % bufferSizeCopy;};
+        auto map = [bottomOfBoundsCopy](float db) { return juce::jmap(db, NEGATIVE_INFINITY, MAX_DECIBELS, bottomOfBoundsCopy, 0.f); };
+        auto increment = [bufferSizeCopy](int& index) mutable { index = (index + 1) % bufferSizeCopy; };
         
         p.startNewSubPath(0, map(bufferDataCopy[readIndexCopy]));
         increment(readIndexCopy);
@@ -367,7 +478,6 @@ private:
 };
 
 //==============================================================================
-//
 struct Goniometer : juce::Component
 {
     Goniometer(juce::AudioBuffer<float>& bufferInput);
@@ -378,7 +488,7 @@ struct Goniometer : juce::Component
     
     void update(juce::AudioBuffer<float>& buffer);
 
-    void updateCoeff(float newDb);
+    void updateCoeff(float new_db);
     
 private:
     void drawBackground(juce::Graphics& g);
@@ -388,8 +498,13 @@ private:
     juce::Path p;
     int w, h;
     juce::Point<int> center;
-    std::vector<juce::String> chars {"+S", "-S", "L", "M", "R"};
+    std::vector<juce::String> chars { "+S", "-S", "L", "M", "R" };
     float scale;
+
+    juce::Colour m_backgroundColour { 0xff323232 };
+    juce::Colour edgeColour { 0xffd2d2d2 };
+    juce::Colour pathColourInside { 0xffd2d2d2 };
+    juce::Colour pathColourOutside { 0xff48bde8 };
 };
 
 //==============================================================================
@@ -398,11 +513,14 @@ struct CorrelationMeter : juce::Component
 {
     CorrelationMeter(juce::AudioBuffer<float>& buf, double sampleRate);
     void paint(juce::Graphics& g) override;
-    void update(juce::int64 averageTime);
+    void update(juce::int64 average_time);
 private:
     juce::AudioBuffer<float>& buffer;
     using FilterType = juce::dsp::IIR::Filter<float>;
     std::array<FilterType, 3> filters;
+
+    juce::Colour m_backgroundColour { 0xff323232 };
+    juce::Colour graphColour { 0xff48bde8 };
 
     Averager<float> slowAverager{1024*3, 0}, peakAverager{512, 0};
     
@@ -523,7 +641,7 @@ struct AnalyzerPathGenerator
         {
             return juce::jmap(v,
                               negativeInfinity, 0.f,
-                              float(bottom+10),   top);
+                              float(bottom+1),   top);
         };
 
         auto y = map(renderData[0]);
@@ -532,7 +650,7 @@ struct AnalyzerPathGenerator
 
         p.startNewSubPath(0, y);
 
-        const int pathResolution = 2;
+        const int pathResolution = 1;
 
         for( int binNum = 1; binNum < numBins; binNum += pathResolution )
         {
@@ -576,11 +694,10 @@ struct PathProducer
 
     void process(juce::Rectangle<float> fftBounds, double sampleRate);
 
-    juce::Path getPath();
+    juce::Path getPath() { return leftChannelFFTPath; }
 
 private:
     SingleChannelSampleFifo<MultiMeterAudioProcessor::BlockType>* leftChannelFifo;
-    SingleChannelSampleFifo<MultiMeterAudioProcessor::BlockType>* rightChannelFifo;
     juce::AudioBuffer<float> monoBuffer;
     FFTDataGenerator<std::vector<float>> leftChannelFFTDataGenerator;
     AnalyzerPathGenerator<juce::Path> pathProducer;
@@ -595,11 +712,21 @@ juce::Timer
     ResponseCurveComponent(MultiMeterAudioProcessor&);
 
     void paint (juce::Graphics&) override;
+    void paintOverChildren(Graphics& g) override;
 
     void timerCallback() override;
+
+    void resized() override;
     
 private:
     MultiMeterAudioProcessor& audioProcessor;
+
+    juce::Colour m_backgroundColour { 0xff323232 };
+
+    juce::Colour m_GraphColourLeft { 0xff48bde8 };
+    juce::Colour m_GraphColourRight { 0xffa0a0a0 };
+
+    xGrid m_grid;
     
     MonoChain monoChain;
     
@@ -617,11 +744,17 @@ private:
     PathProducer leftPathProducer, rightPathProducer;
 };
 
+
+
+
+///*
 //==============================================================================
 //
 struct myLookAndFeel : juce::LookAndFeel_V4
 {
-   void drawRotarySlider(juce::Graphics & g,
+    juce::Colour m_backgroundColour { 0xff323232 };
+
+    void drawRotarySlider(juce::Graphics & g,
                          int     x,
                          int     y,
                          int     width,
@@ -675,9 +808,9 @@ private:
     juce::RangedAudioParameter* param;
     juce::String suffix;
 };
+//*/
  
 //==============================================================================
-//
 class MultiMeterAudioProcessorEditor  : public juce::AudioProcessorEditor, juce::Timer, juce::ComboBox::Listener, juce::ToggleButton::Listener, juce::Slider::Listener
 {
 public:
@@ -699,26 +832,42 @@ public:
     Histogram peakHistogram{"PEAK"}, RMSHistogram{"RMS"};
     
 private:
+    // This reference is provided as a quick way for your editor to
+    // access the processor object that created it.
     MultiMeterAudioProcessor& audioProcessor;
     Goniometer goniometer;
     CorrelationMeter correlationMeter;
     ResponseCurveComponent spectrumAnalyzer;
-    
-    juce::ComboBox decayRateSelector, averageDurationSelector, meterView, holdTimeSelector, histogramViewSelector;
-    juce::ToggleButton showTick,resetHold;
 
-    juce::Label decayRateLabel, averageDurationLabel, meterViewLabel, holdTimeLabel, histogramViewLabel, showTickLabel, resetHoldLabel, scaleKnobLabel, correlationMeterLeft, correlationMeterRight;
+    CustomLook2 lookandfeel;
 
-    float currentDecayRate = 3.f;
-    int meterViewID = 0;
-    float holdTime = 2.f;
-    bool isHistogramStacked = true;
-    juce::int64 averageDuration = 100;
+    SwitchButton visualSwitch;
 
+    int globalWidth{ 800 }, gloablHeight{400};
+
+    juce::Rectangle<int> visualsRoom, meterRoom, controlRoom, correlationRoom,testSpace;
+
+    juce::Colour backgroundColour { 0xffd2d2d2 };
+
+    static constexpr double m_marginInPixels{ 10 };
+
+    // all combobox controls are defined here
+    juce::ComboBox levelMeterDecaySelector, averagerDurationSelector, holdTimeSelector;
+    Switch tickDisplay{ "Hide Tick","Show Tick" }, resetHold{"Reset Hold","Reset Hold"};
+
+    ToggleChain histogramViewButton, meterViewButton;
+
+    juce::Label levelMeterDecayLabel, averagerDurationLabel, meterViewLabel, holdTimeLabel, histogramViewLabel, tickDisplayLabel, correlationLabel0, correlationLabel1, correlationLabel2, scaleKnobLabel;
+
+    float current_decay_rate = 3.f; //define a variable to hold the current decay rate being used and update the variable from combo box changed callback function
+    float hold_time = 2.f; // use this variable to store hold time
+    juce::int64 averager_duration = 100; //use the default average time 100 for averager.
+
+    // use this rectangle to define bounds for side by side and stacked histogram positions
     juce::Rectangle<int> peakSBS, rmsSBS, peakStacked, rmsStacked;
 
-    RotarySliderWithLabels decayRateSlider,
-                           averageDurationSlider,
+    RotarySliderWithLabels levelMeterDecaySlider,
+                           averagerDurationSlider,
                            meterViewSlider,
                            scaleKnobSlider,
                            enableHoldSlier,
@@ -728,8 +877,8 @@ private:
     using APVTS = juce::AudioProcessorValueTreeState;
     using Attachment = APVTS::SliderAttachment;
     
-    Attachment decayRateSliderAttachment,
-               averageDurationSliderAttachment,
+    Attachment levelMeterDecaySliderAttachment,
+               averagerDurationSliderAttachment,
                meterViewSliderAttachment,
                scaleKnobSliderAttachment,
                enableHoldSlierAttachment,
@@ -738,6 +887,7 @@ private:
     
     std::vector<juce::Component*> getComps();
     
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiMeterAudioProcessorEditor)
 };
 

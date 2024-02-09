@@ -9,19 +9,20 @@
 
 #pragma once
 
+// Macro used for testing.
 #define USE_OSC false
 
 #include <JuceHeader.h>
 #include <array>
 
-//==============================================================================
-//
+using namespace juce;
+
 using Filter = juce::dsp::IIR::Filter<float>;
 using CutFilter = juce::dsp::ProcessorChain<Filter, Filter, Filter, Filter>;
 using MonoChain = juce::dsp::ProcessorChain<CutFilter, Filter, Filter, Filter, CutFilter>;
 
 //==============================================================================
-//
+// A standard AbstractFifo-based templated FIFO class.
 template<typename T, size_t Size>
 struct Fifo
 {
@@ -29,7 +30,7 @@ struct Fifo
     
     void prepare(int numSamples, int numChannels)
     {
-        for (auto& buffer : buffers)
+        for ( auto& buffer : buffers)
         {
             buffer.setSize(numChannels,
                            numSamples,
@@ -43,7 +44,7 @@ struct Fifo
     bool push(const T& t)
     {
         auto write = fifo.read(1);
-        if (write.blockSize1 > 0)
+        if ( write.blockSize1 > 0 )
         {
             buffers[write.startIndex1] = t;
             return true;
@@ -54,7 +55,7 @@ struct Fifo
     bool pull(T& t)
     {
         auto read = fifo.write(1);
-        if (read.blockSize1 > 0)
+        if ( read.blockSize1 > 0 )
         {
             t = buffers[read.startIndex1];
             return true;
@@ -64,33 +65,32 @@ struct Fifo
     
     int getNumAvailableForReading() const
     {
-        //if (JUCE_WINDOWS)
-        //    return fifo.getNumReady();
-        //else
+//        if (JUCE_WINDOWS)
+//            return fifo.getNumReady();
+//        else
             fifo.getNumReady();
     }
     
     int getAvailableSpace() const
     {
-        //if (JUCE_WINDOWS)
-        //    return fifo.getFreeSpace();
-        //else
+//        if (JUCE_WINDOWS)
+//            return fifo.getFreeSpace();
+//        else
             fifo.getFreeSpace();
     }
     
 private:
-    juce::AbstractFifo fifo {Size};
+    juce::AbstractFifo fifo { Size };
     std::array<T, Size> buffers;
 };
 
-//==============================================================================
-//
+
 template<typename T>
 struct FifoSpectrumAnalyzer
 {
     void prepare(int numChannels, int numSamples)
     {
-        for(auto& buffer : buffers)
+        for( auto& buffer : buffers )
         {
             buffer.setSize(numChannels, numSamples, false, true, true);
             buffer.clear();
@@ -99,7 +99,7 @@ struct FifoSpectrumAnalyzer
     
     void prepare(size_t numElements)
     {
-        for(auto& buffer : buffers)
+        for( auto& buffer : buffers )
         {
             buffer.clear();
             buffer.resize(numElements, 0);
@@ -109,7 +109,7 @@ struct FifoSpectrumAnalyzer
     bool push(const T& t)
     {
         auto write = fifo.write(1);
-        if(write.blockSize1 > 0)
+        if( write.blockSize1 > 0 )
         {
             buffers[write.startIndex1] = t;
             return true;
@@ -121,7 +121,7 @@ struct FifoSpectrumAnalyzer
     bool pull(T& t)
     {
         auto read = fifo.read(1);
-        if(read.blockSize1 > 0)
+        if( read.blockSize1 > 0 )
         {
             t = buffers[read.startIndex1];
             return true;
@@ -145,8 +145,8 @@ private:
 //
 enum Channel
 {
-    Left,
     Right,
+    Left,
 };
 
 //==============================================================================
@@ -162,14 +162,12 @@ struct SingleChannelSampleFifo
     void update(const BlockType& buffer)
     {
         jassert(prepared.get());
-        if (buffer.getNumChannels() > channelToUse)
+        jassert(buffer.getNumChannels() > channelToUse);
+        auto* channelPtr = buffer.getReadPointer(channelToUse);
+        
+        for( int i = 0; i < buffer.getNumSamples(); ++i )
         {
-            auto* channelPtr = buffer.getReadPointer(channelToUse);
-
-            for (int i = 0; i < buffer.getNumSamples(); ++i)
-            {
-                pushNextSampleIntoFifo(channelPtr[i]);
-            }
+            pushNextSampleIntoFifo(channelPtr[i]);
         }
     }
 
@@ -228,30 +226,24 @@ private:
     }
 };
 
-//==============================================================================
-//
-enum decayRate
+enum levelMeterDecay
 {
-    decayRate_3,
-    decayRate_6,
-    decayRate_12,
-    decayRate_24,
-    decayRate_36,
+    levelMeterDecay_3,
+    levelMeterDecay_6,
+    levelMeterDecay_12,
+    levelMeterDecay_24,
+    levelMeterDecay_36,
 };
 
-//==============================================================================
-//
-enum averageDuration
+enum averagerDuration
 {
-    averageDuration_100,
-    averageDuration_250,
-    averageDuration_500,
-    averageDuration_1000,
-    averageDuration_2000,
+    averagerDuration_100,
+    averagerDuration_250,
+    averagerDuration_500,
+    averagerDuration_1000,
+    averagerDuration_2000,
 };
 
-//==============================================================================
-//
 enum meterView
 {
     meterView_both,
@@ -259,16 +251,12 @@ enum meterView
     meterView_average,
 };
 
-//==============================================================================
-//
 enum enableHold
 {
     enableHold_show,
     enableHold_hide,
 };
 
-//==============================================================================
-//
 enum holdDuration
 {
     holdDuration_00,
@@ -279,16 +267,26 @@ enum holdDuration
     holdDuration_inf,
 };
 
-//==============================================================================
-//
 enum histogramView
 {
     histogramView_stacked,
     histogramView_sideBySide,
 };
 
-//==============================================================================
-//
+struct ChainSettings
+{
+    levelMeterDecay multiMeterLevelMeterDecay { levelMeterDecay::levelMeterDecay_3 };
+    averagerDuration multiMeterAveragerDuration {averagerDuration::averagerDuration_100};
+    meterView multiMeterMeterView {meterView::meterView_both};
+    enableHold multiMeterEnableHold {enableHold::enableHold_show};
+    holdDuration multiMeterHoldDuration {holdDuration::holdDuration_2};
+    histogramView multiMeterHistogramView {histogramView::histogramView_stacked};
+    float multiMeterScaleKnob {100.f};
+};
+
+// A helper function to give us all parameter values in our little data struct.
+ChainSettings getChainSettings(juce::AudioProcessorValueTreeState& apvts);
+
 class MultiMeterAudioProcessor  : public juce::AudioProcessor
 {
 public:
@@ -330,24 +328,28 @@ public:
     void setStateInformation (const void* data, int sizeInBytes) override;
     
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    juce::AudioProcessorValueTreeState apvts{*this, nullptr, "Parameters", createParameterLayout()};
+    juce::AudioProcessorValueTreeState apvts;
     
     void update();
 
     using BlockType = juce::AudioBuffer<float>;
-    SingleChannelSampleFifo<BlockType> leftChannelFifo {Channel::Left};
-    SingleChannelSampleFifo<BlockType> rightChannelFifo {Channel::Right};
+    SingleChannelSampleFifo<BlockType> leftChannelFifo { Channel::Left };
+    SingleChannelSampleFifo<BlockType> rightChannelFifo { Channel::Right };
     
     Fifo<juce::AudioBuffer<float>, 30> fifo;
 
-    juce::ValueTree pluginSettings;
+    float sliderValue;
+    bool tickDisplayState;
+    int levelMeterDecayId, holdTimeId, averagerDurationId, levelMeterDisplayID,histogramDisplayID;
     
     #if USE_OSC
-    juce::dsp::Oscillator<float> osc {[](float x){return std::sin(x);}};
+    juce::dsp::Oscillator<float> osc {[](float x){ return std::sin(x); }};
+
     juce::dsp::Gain<float> gain;
     #endif
     
 private:
+
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MultiMeterAudioProcessor)
 };

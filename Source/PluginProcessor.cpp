@@ -24,7 +24,11 @@ MultiMeterAudioProcessor::MultiMeterAudioProcessor()
                      #endif
                        ),
 #endif
-    pluginSettings(juce::ValueTree("multimeterSetting"))
+    apvts(
+        *this,
+        nullptr,
+        "Parameters",
+        createParameterLayout())
 {
 }
 
@@ -97,7 +101,14 @@ void MultiMeterAudioProcessor::changeProgramName (int index, const juce::String&
 //==============================================================================
 void MultiMeterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
+    // Use this method as the place to do any pre-playback
+    // initialisation that you need.
+    
+    // STEP 1.2.3:
+    // Prepare the Fifo<> instance in prepareToPlay().
     fifo.prepare(sampleRate, getTotalNumOutputChannels());
+    
+    update();
     
     leftChannelFifo.prepare(samplesPerBlock);
     rightChannelFifo.prepare(samplesPerBlock);
@@ -158,21 +169,25 @@ void MultiMeterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     // when they first compile a plugin, but obviously you don't need to keep
     // this code if your algorithm always overwrites all the output channels.
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-    {
-        buffer.clear(i, 0, buffer.getNumSamples());
-    }
+        buffer.clear (i, 0, buffer.getNumSamples());
+    
+    update();
     
     #if USE_OSC
     buffer.clear();
-    juce::dsp::AudioBlock<float> audioBlock {buffer};
+    juce::dsp::AudioBlock<float> audioBlock { buffer };
+    
     osc.setFrequency(440.0f);
+    //gain.setGainDecibels(6.f);
     gain.setGainDecibels(JUCE_LIVE_CONSTANT(6.f));
+    
     for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
     {
         float nextOscillatorSample = osc.processSample(0.f);
         audioBlock.setSample(0, sample, nextOscillatorSample);
-        audioBlock.setSample(1, sample, nextOscillatorSample);
+        audioBlock.setSample(1, sample, nextOscillatorSample); //?
     }
+    
     gain.process(juce::dsp::ProcessContextReplacing<float>(audioBlock));
     #endif
     
@@ -200,16 +215,28 @@ juce::AudioProcessorEditor* MultiMeterAudioProcessor::createEditor()
 //==============================================================================
 void MultiMeterAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
 {
-    // Serialize your ValueTree into destData
-    juce::MemoryOutputStream stream(destData, false);
-    pluginSettings.writeToStream(stream);
+    MemoryOutputStream stream(destData, true);
+
+    stream.writeFloat(sliderValue);
+    stream.writeInt(levelMeterDecayId);
+    stream.writeInt(holdTimeId);
+    stream.writeBool(tickDisplayState);
+    stream.writeInt(averagerDurationId);
+    stream.writeInt(levelMeterDisplayID);
+    stream.writeInt(histogramDisplayID);
 }
 
 void MultiMeterAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
 {
-    // Deserialize your ValueTree from data
-    juce::MemoryInputStream stream(data, sizeInBytes, false);
-    pluginSettings = juce::ValueTree::readFromStream(stream);
+    MemoryInputStream stream(data, static_cast<size_t>(sizeInBytes), false);
+
+    sliderValue = stream.readFloat();
+    levelMeterDecayId = stream.readInt();
+    holdTimeId = stream.readInt();
+    tickDisplayState = stream.readBool();
+    averagerDurationId = stream.readInt();
+    levelMeterDisplayID = stream.readInt();
+    histogramDisplayID = stream.readInt();
 }
 
 //==============================================================================
@@ -217,15 +244,15 @@ juce::AudioProcessorValueTreeState::ParameterLayout MultiMeterAudioProcessor::cr
 {
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
     
-    juce::StringArray stringArrayDecayRate {"-3", "-6", "-12", "-24", "-36"};
-    juce::StringArray stringArrayAverageDuration {"100", "250", "500", "1000", "2000"};
+    juce::StringArray stringArrayLevelMeterDecay {"-3", "-6", "-12", "-24", "-36"};
+    juce::StringArray stringArrayAveragerDuration {"100", "250", "500", "1000", "2000"};
     juce::StringArray stringArrayMeterView {"Both", "Peak", "Avg"};
     juce::StringArray stringArrayEnableHold {"Show", "Hide"};
     juce::StringArray stringArrayHoldDuration {"0", "0.5", "2", "4", "6", "inf"};
     juce::StringArray stringArrayHistogramView {"Stacked", "Side-by-Side"};
 
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Decay Rate", "Decay Rate", stringArrayDecayRate, 0));
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Average Duration", "Average Duration", stringArrayAverageDuration, 0));
+    layout.add(std::make_unique<juce::AudioParameterChoice>("Level Meter Decay", "Level Meter Decay", stringArrayLevelMeterDecay, 0));
+    layout.add(std::make_unique<juce::AudioParameterChoice>("Averager Duration", "Averager Duration", stringArrayAveragerDuration, 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>("Meter View", "Meter View", stringArrayMeterView, 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>("Enable Hold", "Enable Hold", stringArrayEnableHold, 0));
     layout.add(std::make_unique<juce::AudioParameterChoice>("Hold Duration", "Hold Duration", stringArrayHoldDuration, 0));
@@ -237,6 +264,27 @@ juce::AudioProcessorValueTreeState::ParameterLayout MultiMeterAudioProcessor::cr
                                                            100.f));
     
     return layout;
+}
+
+void MultiMeterAudioProcessor::update()
+{
+    auto chainSettings = getChainSettings(apvts);
+    
+}
+
+ChainSettings getChainSettings(juce::AudioProcessorValueTreeState& apvts)
+{
+    ChainSettings settings;
+    
+    settings.multiMeterLevelMeterDecay = static_cast<levelMeterDecay>(apvts.getRawParameterValue("Level Meter Decay")->load());
+    settings.multiMeterAveragerDuration = static_cast<averagerDuration>(apvts.getRawParameterValue("Averager Duration")->load());
+    settings.multiMeterMeterView = static_cast<meterView>(apvts.getRawParameterValue("Meter View")->load());
+    settings.multiMeterEnableHold = static_cast<enableHold>(apvts.getRawParameterValue("Enable Hold")->load());
+    settings.multiMeterHoldDuration = static_cast<holdDuration>(apvts.getRawParameterValue("Hold Duration")->load());
+    settings.multiMeterHistogramView = static_cast<histogramView>(apvts.getRawParameterValue("Histogram View")->load());
+    
+    settings.multiMeterScaleKnob = apvts.getRawParameterValue("Scale Knob")->load();
+    return settings;
 }
 
 //==============================================================================
