@@ -17,9 +17,9 @@ MultiMeter, a cutting-edge AU/VST audio analyzer, caters to audio engineers, pro
 - Provides instantaneous visual feedback of audio signal levels with support for both peak and RMS readings.
 - Displays numeric values of signal levels in decibels, providing precise and quick reference.
 - Implements a high-performance FIFO (First In, First Out) buffer to efficiently handle audio data between DSP and GUI threads.
-- Allows users to adjust the decay rate of meter ticks with various responsiveness options.
+- Allows users to adjust the decay rate of meter ticks with multiple responsiveness options.
 - Includes the ability to hold peak values for a specified duration to enhance the analysis of transient audio material.
-- Features a series of comboboxes and sliders to personalize metering behavior, including decay rates, averager durations, and meter displays.
+- Features a series of comboboxes and sliders to personalize metering behavior, including averager durations and various meter displays.
 
 ### Histogram
 - Visualizes the distribution of signal level dynamics over time.
