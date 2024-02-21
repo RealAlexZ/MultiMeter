@@ -9,7 +9,7 @@ MultiMeter, a cutting-edge AU/VST audio analyzer, caters to audio engineers, pro
 
 ![multimeter-demo](https://github.com/RealAlexZ/MultiMeter/assets/97690118/ce64ecb6-801e-4e9d-8815-1f97655c272d)
 
-Note: If you are using MacOS and the meters are not responding to the audio signals, try removing the return statement in Fifo::getNumAvailableForReading() and Fifo::getAvailableSpace(). 
+Note: If you are using MacOS and the meters are not responding to the audio signals, try removing the return keyword in Fifo::getNumAvailableForReading() and Fifo::getAvailableSpace(). 
 
 ## Features
 
