@@ -71,7 +71,8 @@ struct Fifo
     int getNumAvailableForReading() const
     {
         // TODO:
-        // If you are using MacOS and all the meters are not working, try getting rid of the return keyword
+        // If you are using MacOS and the meters are not responding to the audio signals,
+        // try removing the return keyword
         return fifo.getNumReady();
     }
 
@@ -79,12 +80,13 @@ struct Fifo
     int getAvailableSpace() const
     {
         // TODO:
-        // If you are using MacOS and all the meters are not working, try getting rid of the return keyword
+        // If you are using MacOS and the meters are not responding to the audio signals
+        // try removing the return keyword
         return fifo.getFreeSpace();
     }
 
 private:
-    juce::AbstractFifo fifo{ Size }; // AbstractFifo object to manage buffer read/write positions
+    juce::AbstractFifo fifo{Size}; // AbstractFifo object to manage buffer read/write positions
     std::array<T, Size> buffers; // Array of buffers to store data elements
 };
 
