@@ -11,8 +11,6 @@
 #include "PluginEditor.h"
 
 //==============================================================================
-
-//==============================================================================
 MultiMeterAudioProcessor::MultiMeterAudioProcessor()
 #ifndef JucePlugin_PreferredChannelConfigurations
      : AudioProcessor (BusesProperties()
@@ -77,7 +75,7 @@ double MultiMeterAudioProcessor::getTailLengthSeconds() const
 int MultiMeterAudioProcessor::getNumPrograms()
 {
     return 1;   // NB: some hosts don't cope very well if you tell them there are 0 programs,
-                // so this should be at least 1, even if you're not really implementing programs.
+                // so this should be at least 1, even if you're not really implementing programs
 }
 
 int MultiMeterAudioProcessor::getCurrentProgram()
@@ -101,14 +99,10 @@ void MultiMeterAudioProcessor::changeProgramName (int index, const juce::String&
 //==============================================================================
 void MultiMeterAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    // Use this method as the place to do any pre-playback
-    // initialisation that you need.
+    // Use this method as the place to do any pre-playback initialization
     
-    // STEP 1.2.3:
-    // Prepare the Fifo<> instance in prepareToPlay().
+    // Prepare the Fifo<> instance in prepareToPlay()
     fifo.prepare(sampleRate, getTotalNumOutputChannels());
-    
-    update();
     
     leftChannelFifo.prepare(samplesPerBlock);
     rightChannelFifo.prepare(samplesPerBlock);
@@ -137,10 +131,10 @@ bool MultiMeterAudioProcessor::isBusesLayoutSupported (const BusesLayout& layout
     juce::ignoreUnused (layouts);
     return true;
   #else
-    // This is the place where you check if the layout is supported.
-    // In this template code we only support mono or stereo.
+    // This is the place where you check if the layout is supported
+    // In this template code we only support mono or stereo
     // Some plugin hosts, such as certain GarageBand versions, will only
-    // load plugins that support stereo bus layouts.
+    // load plugins that support stereo bus layouts
     if (layouts.getMainOutputChannelSet() != juce::AudioChannelSet::mono()
      && layouts.getMainOutputChannelSet() != juce::AudioChannelSet::stereo())
         return false;
@@ -162,16 +156,9 @@ void MultiMeterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     auto totalNumInputChannels  = getTotalNumInputChannels();
     auto totalNumOutputChannels = getTotalNumOutputChannels();
 
-    // In case we have more outputs than inputs, this code clears any output
-    // channels that didn't contain input data, (because these aren't
-    // guaranteed to be empty - they may contain garbage).
-    // This is here to avoid people getting screaming feedback
-    // when they first compile a plugin, but obviously you don't need to keep
-    // this code if your algorithm always overwrites all the output channels.
+    // Clear any output channels that do not contain input data
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
-        buffer.clear (i, 0, buffer.getNumSamples());
-    
-    update();
+        buffer.clear(i, 0, buffer.getNumSamples());
     
     #if USE_OSC
     buffer.clear();
@@ -185,20 +172,23 @@ void MultiMeterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     {
         float nextOscillatorSample = osc.processSample(0.f);
         audioBlock.setSample(0, sample, nextOscillatorSample);
-        audioBlock.setSample(1, sample, nextOscillatorSample); //?
+        audioBlock.setSample(1, sample, nextOscillatorSample);
     }
     
     gain.process(juce::dsp::ProcessContextReplacing<float>(audioBlock));
     #endif
     
+    // Push the current audio buffer to the FIFO for processing
     fifo.push(buffer);
-    
+
+    // Update the left and right channel FIFOs with the current audio buffer
     leftChannelFifo.update(buffer);
     rightChannelFifo.update(buffer);
-    
-    #if USE_OSC
+
+#if USE_OSC
+    // Clear the audio buffer if oscillator synthesis is used
     buffer.clear();
-    #endif
+#endif
 }
 
 //==============================================================================
@@ -213,10 +203,12 @@ juce::AudioProcessorEditor* MultiMeterAudioProcessor::createEditor()
 }
 
 //==============================================================================
-void MultiMeterAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
+void MultiMeterAudioProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
-    MemoryOutputStream stream(destData, true);
+    // Serialize the state information to a memory block
+    juce::MemoryOutputStream stream(destData, true);
 
+    // Write the parameters to the memory block
     stream.writeFloat(sliderValue);
     stream.writeInt(levelMeterDecayId);
     stream.writeInt(holdTimeId);
@@ -226,10 +218,12 @@ void MultiMeterAudioProcessor::getStateInformation (juce::MemoryBlock& destData)
     stream.writeInt(histogramDisplayID);
 }
 
-void MultiMeterAudioProcessor::setStateInformation (const void* data, int sizeInBytes)
+void MultiMeterAudioProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
-    MemoryInputStream stream(data, static_cast<size_t>(sizeInBytes), false);
+    // Deserialize the state information from a memory block.
+    juce::MemoryInputStream stream(data, static_cast<size_t>(sizeInBytes), false);
 
+    // Read the parameters from the memory block and update the state
     sliderValue = stream.readFloat();
     levelMeterDecayId = stream.readInt();
     holdTimeId = stream.readInt();
@@ -242,53 +236,18 @@ void MultiMeterAudioProcessor::setStateInformation (const void* data, int sizeIn
 //==============================================================================
 juce::AudioProcessorValueTreeState::ParameterLayout MultiMeterAudioProcessor::createParameterLayout()
 {
+    // Create and return the parameter layout for the audio processor
     juce::AudioProcessorValueTreeState::ParameterLayout layout;
-    
-    juce::StringArray stringArrayLevelMeterDecay {"-3", "-6", "-12", "-24", "-36"};
-    juce::StringArray stringArrayAveragerDuration {"100", "250", "500", "1000", "2000"};
-    juce::StringArray stringArrayMeterView {"Both", "Peak", "Avg"};
-    juce::StringArray stringArrayEnableHold {"Show", "Hide"};
-    juce::StringArray stringArrayHoldDuration {"0", "0.5", "2", "4", "6", "inf"};
-    juce::StringArray stringArrayHistogramView {"Stacked", "Side-by-Side"};
-
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Level Meter Decay", "Level Meter Decay", stringArrayLevelMeterDecay, 0));
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Averager Duration", "Averager Duration", stringArrayAveragerDuration, 0));
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Meter View", "Meter View", stringArrayMeterView, 0));
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Enable Hold", "Enable Hold", stringArrayEnableHold, 0));
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Hold Duration", "Hold Duration", stringArrayHoldDuration, 0));
-    layout.add(std::make_unique<juce::AudioParameterChoice>("Histogram View", "Histogram View", stringArrayHistogramView, 0));
-    
     layout.add(std::make_unique<juce::AudioParameterFloat>("Scale Knob",
-                                                           "Scale Knob",
-                                                           juce::NormalisableRange<float>(50.f, 200.f, 1.f, 0.1),
-                                                           100.f));
-    
+        "Scale Knob",
+        juce::NormalisableRange<float>(50.f, 200.f, 1.f, 0.1),
+        100.f));
+
     return layout;
 }
 
-void MultiMeterAudioProcessor::update()
-{
-    auto chainSettings = getChainSettings(apvts);
-    
-}
-
-ChainSettings getChainSettings(juce::AudioProcessorValueTreeState& apvts)
-{
-    ChainSettings settings;
-    
-    settings.multiMeterLevelMeterDecay = static_cast<levelMeterDecay>(apvts.getRawParameterValue("Level Meter Decay")->load());
-    settings.multiMeterAveragerDuration = static_cast<averagerDuration>(apvts.getRawParameterValue("Averager Duration")->load());
-    settings.multiMeterMeterView = static_cast<meterView>(apvts.getRawParameterValue("Meter View")->load());
-    settings.multiMeterEnableHold = static_cast<enableHold>(apvts.getRawParameterValue("Enable Hold")->load());
-    settings.multiMeterHoldDuration = static_cast<holdDuration>(apvts.getRawParameterValue("Hold Duration")->load());
-    settings.multiMeterHistogramView = static_cast<histogramView>(apvts.getRawParameterValue("Histogram View")->load());
-    
-    settings.multiMeterScaleKnob = apvts.getRawParameterValue("Scale Knob")->load();
-    return settings;
-}
-
 //==============================================================================
-// This creates new instances of the plugin..
+// This creates new instances of the plugin
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new MultiMeterAudioProcessor();

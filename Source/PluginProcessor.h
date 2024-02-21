@@ -22,29 +22,32 @@ using CutFilter = juce::dsp::ProcessorChain<Filter, Filter, Filter, Filter>;
 using MonoChain = juce::dsp::ProcessorChain<CutFilter, Filter, Filter, Filter, CutFilter>;
 
 //==============================================================================
-// A standard AbstractFifo-based templated FIFO class.
+// A standard AbstractFifo-based templated FIFO class
 template<typename T, size_t Size>
 struct Fifo
 {
-    size_t getSize() const noexcept {return Size;}
-    
+    // Returns the fixed size of the FIFO buffer.
+    size_t getSize() const noexcept { return Size; }
+
+    // Prepares the FIFO buffer for writing with the given number of samples and channels
     void prepare(int numSamples, int numChannels)
     {
-        for ( auto& buffer : buffers)
+        for (auto& buffer : buffers)
         {
             buffer.setSize(numChannels,
-                           numSamples,
-                           false,
-                           true,
-                           true);
+                numSamples,
+                false, // clearUnusedChannels
+                true,  // allocateExtraSpace
+                true); // avoidReallocating
             buffer.clear();
         }
     }
-    
+
+    // Pushes an element into the FIFO buffer
     bool push(const T& t)
     {
         auto write = fifo.read(1);
-        if ( write.blockSize1 > 0 )
+        if (write.blockSize1 > 0)
         {
             buffers[write.startIndex1] = t;
             return true;
@@ -52,97 +55,103 @@ struct Fifo
         return false;
     }
 
+    // Pulls an element from the FIFO buffer
     bool pull(T& t)
     {
         auto read = fifo.write(1);
-        if ( read.blockSize1 > 0 )
+        if (read.blockSize1 > 0)
         {
             t = buffers[read.startIndex1];
             return true;
         }
         return false;
     }
-    
+
+    // Returns the number of elements available for reading from the FIFO buffer
     int getNumAvailableForReading() const
     {
-//        if (JUCE_WINDOWS)
-//            return fifo.getNumReady();
-//        else
-            fifo.getNumReady();
+        // TODO:
+        // If you are using MacOS and all the meters are not working, try getting rid of the return keyword
+        return fifo.getNumReady();
     }
-    
+
+    // Returns the available space in the FIFO buffer for writing
     int getAvailableSpace() const
     {
-//        if (JUCE_WINDOWS)
-//            return fifo.getFreeSpace();
-//        else
-            fifo.getFreeSpace();
+        // TODO:
+        // If you are using MacOS and all the meters are not working, try getting rid of the return keyword
+        return fifo.getFreeSpace();
     }
-    
+
 private:
-    juce::AbstractFifo fifo { Size };
-    std::array<T, Size> buffers;
+    juce::AbstractFifo fifo{ Size }; // AbstractFifo object to manage buffer read/write positions
+    std::array<T, Size> buffers; // Array of buffers to store data elements
 };
 
-
+//==============================================================================
 template<typename T>
 struct FifoSpectrumAnalyzer
 {
+    // Prepares the analyzer with the given number of channels and samples per channel
     void prepare(int numChannels, int numSamples)
     {
-        for( auto& buffer : buffers )
+        for (auto& buffer : buffers)
         {
             buffer.setSize(numChannels, numSamples, false, true, true);
             buffer.clear();
         }
     }
-    
+
+    // Prepares the analyzer with the specified number of elements for each channel
     void prepare(size_t numElements)
     {
-        for( auto& buffer : buffers )
+        for (auto& buffer : buffers)
         {
             buffer.clear();
             buffer.resize(numElements, 0);
         }
     }
-    
+
+    // Pushes an element into the analyzer's FIFO buffer
     bool push(const T& t)
     {
         auto write = fifo.write(1);
-        if( write.blockSize1 > 0 )
+        if (write.blockSize1 > 0)
         {
             buffers[write.startIndex1] = t;
             return true;
         }
-        
+
         return false;
     }
-    
+
+    // Pulls an element from the analyzer's FIFO buffer
     bool pull(T& t)
     {
         auto read = fifo.read(1);
-        if( read.blockSize1 > 0 )
+        if (read.blockSize1 > 0)
         {
             t = buffers[read.startIndex1];
             return true;
         }
-        
+
         return false;
     }
-    
+
+    // Returns the number of elements available for reading from the FIFO buffer
     int getNumAvailableForReading() const
     {
         return fifo.getNumReady();
     }
 
 private:
-    static constexpr int Capacity = 30;
-    std::array<T, Capacity> buffers;
-    juce::AbstractFifo fifo {Capacity};
+    static constexpr int Capacity = 30; // Capacity of the FIFO buffer
+    std::array<T, Capacity> buffers;    // Array of buffers to store data elements
+    juce::AbstractFifo fifo {Capacity};  // AbstractFifo object to manage buffer read/write positions
 };
 
+
 //==============================================================================
-//
 enum Channel
 {
     Right,
@@ -150,143 +159,90 @@ enum Channel
 };
 
 //==============================================================================
-//
 template<typename BlockType>
 struct SingleChannelSampleFifo
 {
+    // Constructor.
     SingleChannelSampleFifo(Channel ch) : channelToUse(ch)
     {
-        prepared.set(false);
+        prepared.set(false); // Initialize the prepared flag to false
     }
-    
+
+    // Updates the FIFO with new samples from the provided block
     void update(const BlockType& buffer)
     {
-        jassert(prepared.get());
-        jassert(buffer.getNumChannels() > channelToUse);
-        auto* channelPtr = buffer.getReadPointer(channelToUse);
-        
-        for( int i = 0; i < buffer.getNumSamples(); ++i )
+        jassert(prepared.get()); // Ensure that the FIFO is prepared.
+        jassert(buffer.getNumChannels() > channelToUse); // Ensure that the buffer has the required number of channels
+        auto* channelPtr = buffer.getReadPointer(channelToUse); // Get a pointer to the channel data
+
+        // Iterate over the samples in the buffer and push them into the FIFO
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
         {
             pushNextSampleIntoFifo(channelPtr[i]);
         }
     }
 
+    // Prepares the FIFO with the specified buffer size
     void prepare(int bufferSize)
     {
-        prepared.set(false);
-        size.set(bufferSize);
-        
-        bufferToFill.setSize(1, bufferSize, false, true, true);
-        audioBufferFifo.prepare(1, bufferSize);
-        fifoIndex = 0;
-        prepared.set(true);
+        prepared.set(false); // Mark the FIFO as not prepared
+        size.set(bufferSize); // Set the size of the buffer
+
+        bufferToFill.setSize(1, bufferSize, false, true, true); // Set the size of the temporary buffer
+        audioBufferFifo.prepare(1, bufferSize); // Prepare the FIFO
+        fifoIndex = 0; // Reset the FIFO index
+        prepared.set(true); // Mark the FIFO as prepared
     }
-    
+
+    // Returns the number of complete buffers available for reading from the FIFO
     int getNumCompleteBuffersAvailable() const
     {
         return audioBufferFifo.getNumAvailableForReading();
     }
-    
+
+    // Checks if the FIFO is prepared
     bool isPrepared() const
     {
         return prepared.get();
     }
-    
+
+    // Returns the size of the FIFO buffer
     int getSize() const
     {
         return size.get();
     }
-    
+
+    // Retrieves a complete audio buffer from the FIFO
     bool getAudioBuffer(BlockType& buf)
     {
         return audioBufferFifo.pull(buf);
     }
- 
+
 private:
-    Channel channelToUse;
-    int fifoIndex = 0;
-    FifoSpectrumAnalyzer<BlockType> audioBufferFifo;
-    BlockType bufferToFill;
-    juce::Atomic<bool> prepared = false;
-    juce::Atomic<int> size = 0;
-    
+    Channel channelToUse; // The channel to use for the FIFO
+    int fifoIndex = 0; // Index for managing the FIFO buffer
+    FifoSpectrumAnalyzer<BlockType> audioBufferFifo; // FIFO for storing audio buffers
+    BlockType bufferToFill; // Temporary buffer for filling the FIFO
+    juce::Atomic<bool> prepared = false; // Flag indicating if the FIFO is prepared
+    juce::Atomic<int> size = 0; // Size of the FIFO buffer
+
+    // Pushes the next sample into the FIFO buffer
     void pushNextSampleIntoFifo(float sample)
     {
+        // If the FIFO buffer is full, push the buffer into the FIFO
         if (fifoIndex == bufferToFill.getNumSamples())
         {
             auto ok = audioBufferFifo.push(bufferToFill);
-
-            juce::ignoreUnused(ok);
-            
-            fifoIndex = 0;
+            juce::ignoreUnused(ok); // Ignore the return value
+            fifoIndex = 0; // Reset the FIFO index
         }
-        
-        bufferToFill.setSample(0, fifoIndex, sample);
-        ++fifoIndex;
+
+        bufferToFill.setSample(0, fifoIndex, sample); // Set the sample in the temporary buffer
+        ++fifoIndex; // Move to the next index in the FIFO buffer
     }
 };
 
-enum levelMeterDecay
-{
-    levelMeterDecay_3,
-    levelMeterDecay_6,
-    levelMeterDecay_12,
-    levelMeterDecay_24,
-    levelMeterDecay_36,
-};
-
-enum averagerDuration
-{
-    averagerDuration_100,
-    averagerDuration_250,
-    averagerDuration_500,
-    averagerDuration_1000,
-    averagerDuration_2000,
-};
-
-enum meterView
-{
-    meterView_both,
-    meterView_peak,
-    meterView_average,
-};
-
-enum enableHold
-{
-    enableHold_show,
-    enableHold_hide,
-};
-
-enum holdDuration
-{
-    holdDuration_00,
-    holdDuration_05,
-    holdDuration_2,
-    holdDuration_4,
-    holdDuration_6,
-    holdDuration_inf,
-};
-
-enum histogramView
-{
-    histogramView_stacked,
-    histogramView_sideBySide,
-};
-
-struct ChainSettings
-{
-    levelMeterDecay multiMeterLevelMeterDecay { levelMeterDecay::levelMeterDecay_3 };
-    averagerDuration multiMeterAveragerDuration {averagerDuration::averagerDuration_100};
-    meterView multiMeterMeterView {meterView::meterView_both};
-    enableHold multiMeterEnableHold {enableHold::enableHold_show};
-    holdDuration multiMeterHoldDuration {holdDuration::holdDuration_2};
-    histogramView multiMeterHistogramView {histogramView::histogramView_stacked};
-    float multiMeterScaleKnob {100.f};
-};
-
-// A helper function to give us all parameter values in our little data struct.
-ChainSettings getChainSettings(juce::AudioProcessorValueTreeState& apvts);
-
+//==============================================================================
 class MultiMeterAudioProcessor  : public juce::AudioProcessor
 {
 public:
@@ -327,26 +283,41 @@ public:
     void getStateInformation (juce::MemoryBlock& destData) override;
     void setStateInformation (const void* data, int sizeInBytes) override;
     
+    // Creates the parameter layout for the audio processor
     static juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
-    juce::AudioProcessorValueTreeState apvts;
-    
-    void update();
 
+    // Manages the state of all parameters in the audio processor
+    juce::AudioProcessorValueTreeState apvts;
+
+    // Defines the block type for the FIFO
     using BlockType = juce::AudioBuffer<float>;
+
+    // FIFO for storing samples from the left channel
     SingleChannelSampleFifo<BlockType> leftChannelFifo { Channel::Left };
+
+    // FIFO for storing samples from the right channel
     SingleChannelSampleFifo<BlockType> rightChannelFifo { Channel::Right };
-    
+
+    // FIFO for storing audio buffers
     Fifo<juce::AudioBuffer<float>, 30> fifo;
 
+    // Value of the slider
     float sliderValue;
-    bool tickDisplayState;
-    int levelMeterDecayId, holdTimeId, averagerDurationId, levelMeterDisplayID,histogramDisplayID;
-    
-    #if USE_OSC
-    juce::dsp::Oscillator<float> osc {[](float x){ return std::sin(x); }};
 
+    // Flag indicating the display state of ticks
+    bool tickDisplayState;
+
+    // IDs for various parameters
+    int levelMeterDecayId, holdTimeId, averagerDurationId, levelMeterDisplayID, histogramDisplayID;
+
+#if USE_OSC
+    // Oscillator for generating test signals
+    juce::dsp::Oscillator<float> osc {[](float x) { return std::sin(x); }};
+
+    // Gain control for the oscillator output
     juce::dsp::Gain<float> gain;
-    #endif
+#endif
+
     
 private:
 
