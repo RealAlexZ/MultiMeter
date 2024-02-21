@@ -1,7 +1,6 @@
 # MultiMeter
 
 ## Overview
-Update: Major code refactoring is currently in progress.
 
 MultiMeter, a cutting-edge AU/VST audio analyzer, caters to audio engineers, producers, and musicians who seek precision and versatility. Leveraging the JUCE framework, MultiMeter delivers a robust array of features for pristine real-time audio analysis, enhancing mixing, mastering, and sound design processes.
 
@@ -10,6 +9,7 @@ MultiMeter, a cutting-edge AU/VST audio analyzer, caters to audio engineers, pro
 
 ![multimeter-demo](https://github.com/RealAlexZ/MultiMeter/assets/97690118/ce64ecb6-801e-4e9d-8815-1f97655c272d)
 
+Note: If you are using MacOS and the meters are not responding to the audio signals, try removing the return statement in Fifo::getNumAvailableForReading() and Fifo::getAvailableSpace(). 
 
 ## Features
 
