@@ -2,7 +2,7 @@
 
 ## Overview
 
-MultiMeter, a cutting-edge AU/VST audio analyzer, caters to audio engineers, producers, and musicians who seek precision and versatility. Leveraging the JUCE framework, MultiMeter delivers a robust array of features for pristine real-time audio analysis, enhancing mixing, mastering, and sound design processes.
+MultiMeter, an aesthetic AU/VST audio analyzer, caters to audio engineers, producers, and musicians who seek precision and versatility. Leveraging the JUCE framework, MultiMeter delivers a robust array of functions for pristine real-time audio analysis to empower mixing, mastering, and sound design.
 
 
 ## User Interface
@@ -13,13 +13,15 @@ Note: If you are using MacOS and the meters are not responding to the audio sign
 
 ## Features
 
-### Metering
+### General Metering
+- Implements a high-performance FIFO (First In, First Out) buffer to efficiently handle audio data between DSP and GUI threads.
+- Features a series of comboboxes and sliders to personalize metering behavior, including averager durations and various meter displays.
+
+### Level Meter
 - Provides instantaneous visual feedback of audio signal levels with support for both peak and RMS readings.
 - Displays numeric values of signal levels in decibels, providing precise and quick reference.
-- Implements a high-performance FIFO (First In, First Out) buffer to efficiently handle audio data between DSP and GUI threads.
 - Allows users to adjust the decay rate of meter ticks with multiple responsiveness options.
-- Includes the ability to hold peak values for a specified duration to enhance the analysis of transient audio material.
-- Features a series of comboboxes and sliders to personalize metering behavior, including averager durations and various meter displays.
+- Includes the ability to hold peak tick values for a specified duration to enhance the analysis of transient audio material.
 
 ### Histogram
 - Visualizes the distribution of signal level dynamics over time.
