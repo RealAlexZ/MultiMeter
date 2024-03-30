@@ -154,10 +154,11 @@ private:
 
 
 //==============================================================================
+// Just for clarity, channels are 0 based so Left should be first.
 enum Channel
 {
-    Right,
     Left,
+    Right,
 };
 
 //==============================================================================
@@ -174,9 +175,17 @@ struct SingleChannelSampleFifo
     void update(const BlockType& buffer)
     {
         jassert(prepared.get()); // Ensure that the FIFO is prepared.
-        jassert(buffer.getNumChannels() > channelToUse); // Ensure that the buffer has the required number of channels
-        auto* channelPtr = buffer.getReadPointer(channelToUse); // Get a pointer to the channel data
-
+        
+        // If we're not using stereo, set mono.
+        // Otherwise, newer Logic Pro X and the validation tools will fail causing crash ->
+        // meaning the plugin is invalidated and cannot be used from Plugin Manager.
+        auto actualChannelToUse = buffer.getNumChannels() > 1 ? channelToUse : 0;
+        
+        // Now we ensure that the buffer has the required number of channels, otherwise assert.
+        jassert(buffer.getNumChannels() > actualChannelToUse);
+        
+        auto* channelPtr = buffer.getReadPointer(actualChannelToUse); // Get a pointer to the channel data
+        
         // Iterate over the samples in the buffer and push them into the FIFO
         for (int i = 0; i < buffer.getNumSamples(); ++i)
         {
