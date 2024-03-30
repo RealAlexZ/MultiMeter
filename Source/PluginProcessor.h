@@ -46,10 +46,12 @@ struct Fifo
     // Pushes an element into the FIFO buffer
     bool push(const T& t)
     {
-        auto write = fifo.read(1);
-        if (write.blockSize1 > 0)
+        int start1, size1, start2, size2;
+        fifo.prepareToWrite(1, start1, size1, start2, size2); // Prepare to write one element
+        if (size1 > 0)
         {
-            buffers[write.startIndex1] = t;
+            buffers[start1] = t;
+            fifo.finishedWrite(size1); // Update the write position
             return true;
         }
         return false;
@@ -58,10 +60,12 @@ struct Fifo
     // Pulls an element from the FIFO buffer
     bool pull(T& t)
     {
-        auto read = fifo.write(1);
-        if (read.blockSize1 > 0)
+        int start1, size1, start2, size2;
+        fifo.prepareToRead(1, start1, size1, start2, size2); // Prepare to read one element
+        if (size1 > 0)
         {
-            t = buffers[read.startIndex1];
+            t = buffers[start1]; // Retrieve the data
+            fifo.finishedRead(size1); // Update the read position
             return true;
         }
         return false;
