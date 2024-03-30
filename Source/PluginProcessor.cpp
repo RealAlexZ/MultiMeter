@@ -179,10 +179,7 @@ void MultiMeterAudioProcessor::processBlock (juce::AudioBuffer<float>& buffer, j
     #endif
     
     // Push the current audio buffer to the FIFO for processing
-//    DBG("BEFORE pushing data to FIFO: " << (buffer.getNumSamples()));
     fifo.push(buffer);
-//    DBG("AFTER pushing data to FIFO: " << (buffer.getNumSamples()));
-
 
     // Update the left and right channel FIFOs with the current audio buffer
     leftChannelFifo.update(buffer);
