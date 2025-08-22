@@ -1,39 +1,36 @@
 # MultiMeter
 
-## Overview
-
-MultiMeter, an aesthetic AU/VST audio analyzer, caters to audio engineers, producers, and musicians who seek precision and versatility. Leveraging the JUCE framework, MultiMeter delivers a robust array of functions for pristine real-time audio analysis to empower mixing, mastering, and sound design.
-
-
-## User Interface
+ChucKsplainer is a Web-based chatbot that teaches ChucK—a programming language for music creation—by helping students explore, understand, and complete ChucK code. This platform democratizes educational resources for both computer science and music education.
 
 ![multimeter-demo](https://github.com/RealAlexZ/MultiMeter/assets/97690118/ce64ecb6-801e-4e9d-8815-1f97655c272d)
 
 Note: If you are using MacOS and the meters are not responding to the audio signals, try removing the return keyword in Fifo::getNumAvailableForReading() and Fifo::getAvailableSpace(). 
 
-## Features
 
 ### General Metering
-- Implements a high-performance FIFO (First In, First Out) buffer to efficiently handle audio data between DSP and GUI threads.
-- Features a series of comboboxes and sliders to personalize metering behavior, including averager durations and various meter displays.
+- Employs a high-performance FIFO (First In, First Out) buffer to handle audio data between DSP and GUI threads.
+- Features comboboxes and sliders to personalize metering behavior.
 
 ### Level Meter
-- Provides instantaneous visual feedback of audio signal levels with support for both peak and RMS readings.
-- Displays numeric values of signal levels in decibels, providing precise and quick reference.
-- Allows users to adjust the decay rate of meter ticks with multiple responsiveness options.
-- Includes the ability to hold peak tick values for a specified duration to enhance the analysis of transient audio material.
+- Provides instantaneous visual feedback of audio signal levels with numeric value displays in decibels.
+- Supports both Root Mean Squared (RMS) and peak readings.
+- Enables user adjustment of the decay rate of meter ticks with multiple responsiveness options.
+- Allows holding peak tick values for a specified duration to enhance the analysis of transient audio materials.
+
+### FFT Spectrogram Analyzer
+- Presents a high-resolution Fast Fourier Transform (FFT) spectrum with logarithmically scaled frequency bins, displaying the frequency content over time with a curve of all frequency components in the incoming signal and enabling in-depth spectral balance analysis.
 
 ### Histogram
 - Visualizes the distribution of signal level dynamics over time.
 
-### Goniometer
-- Converts L/R audio signals into Mid/Side representations that provide valuable insights into stereo field distribution and phase relationships.
-
 ### Correlation Meter
 - Provides instantaneous and average correlation readings between left and right channels to help identify phase issues and ensure mono compatibility.
 
-### Spectrogram Analyzer
-- Boasts a high-resolution spectrogram that displays the frequency content over time across both left and right channels, enabling in-depth spectral balance analysis and identification of potential mix flaws.
+### Goniometer
+- Converts L/R audio signals into Mid/Side representations that provide insights into the coherence of the stereo field distribution and phase differences between the left and right channels.
 
-## Dependencies
+### Correlation Meter
+- Provides real-time readings of the phase correlation between left and right audio channels, ranging from +1 (fully in-phase) to 0 (wide stereo) to -1 (out-of-phase), for identifying phase issues and ensuring mono compatibility.
+
+### Dependencies
 - **JUCE:** 6.1.2
